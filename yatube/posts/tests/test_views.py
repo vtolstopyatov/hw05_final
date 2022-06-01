@@ -54,6 +54,7 @@ class PostsPagesTests(TestCase):
         Post.objects.bulk_create(objs)
 
     def setUp(self):
+        self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
         self.another_authorized_client = Client()
@@ -153,7 +154,6 @@ class PostsPagesTests(TestCase):
             text='Тест кеша',
             author=self.user
         )
-        cache.clear()
         response = self.authorized_client.get(
             reverse('posts:posts_main')
         )
@@ -171,47 +171,41 @@ class PostsPagesTests(TestCase):
         after_clear = response.content
         self.assertNotEqual(before_delete, after_clear)
 
-    def test_subscribe_service_work_correctly(self):
-        """Подписка на авторов работает корректно"""
-        user = self.user
-        # Без подписки постов нет
+    def test_authorized_user_can_subscribe(self):
+        """Авторизованный пользователь может подписаться на автора"""
         response = self.another_authorized_client.get(
-            reverse('posts:follow_index')
-        )
-        follows = response.context.get('page_obj')
-        self.assertEqual(len(follows), 0)
-        # Подписка
-        response = self.another_authorized_client.get(
-            reverse('posts:profile_follow', args={user}), follow=True
+            reverse('posts:profile_follow', args={self.user}), follow=True
         )
         self.assertRedirects(
-            response, reverse('posts:profile', args={user})
+            response, reverse('posts:profile', args={self.user})
         )
-        # После подписки стало 10 постов на странице
-        response = self.another_authorized_client.get(
-            reverse('posts:follow_index')
-        )
-        follows = response.context.get('page_obj')
-        self.assertEqual(len(follows), 10)
-        # У пользователя без подписок страница пуста
-        response = self.authorized_client.get(
-            reverse('posts:follow_index')
-        )
-        follows = response.context.get('page_obj')
-        self.assertEqual(len(follows), 0)
-        # Атписка
-        response = self.another_authorized_client.get(
-            reverse('posts:profile_unfollow', args={user}), follow=True
+
+    def test_unauthorized_user_cant_subscribe(self):
+        """Неавторизованный пользователь отправлен на авторизацию"""
+        response = self.guest_client.get(
+            '/posts/1/comment/', follow=True
         )
         self.assertRedirects(
-            response, reverse('posts:profile', args={user})
+            response, '/auth/login/?next=/posts/1/comment/'
         )
-        # После отписки постов снова нет
-        response = self.another_authorized_client.get(
+
+    def test_user_with_subscribe_have_posts(self):
+        """У пользователя с подписками есть посты на странице /follow/"""
+        self.another_authorized_client.get(
+            reverse('posts:profile_follow', args={self.user}), follow=True
+        )
+        posts = Post.objects.filter(
+            author__following__user=self.another_user).exists()
+        self.assertTrue(posts)
+
+    def test_follow_page_of_user_without_subscribe_is_clear(self):
+        """Посты не попадают на страницу /follow/ пользователя без подписок"""
+        self.another_authorized_client.get(
             reverse('posts:follow_index')
         )
-        follows = response.context.get('page_obj')
-        self.assertEqual(len(follows), 0)
+        posts = Post.objects.filter(
+            author__following__user=self.another_user).exists()
+        self.assertFalse(posts)
 
 
 class PostsPagesImagesTests(TestCase):

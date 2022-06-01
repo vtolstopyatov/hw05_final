@@ -140,8 +140,8 @@ CACHES = {
 STATIC_URL = '/static/'
 
 LOGIN_URL = 'users:login'
-LOGIN_REDIRECT_URL = 'posts:index'
-# LOGOUT_REDIRECT_URL = 'posts:index'
+LOGIN_REDIRECT_URL = 'posts:posts_main'
+# LOGOUT_REDIRECT_URL = 'posts:posts_main'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
