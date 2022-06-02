@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
-from posts.models import Group, Post
+from posts.models import Follow, Group, Post
 from django.core.cache import cache
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -176,9 +176,11 @@ class PostsPagesTests(TestCase):
         response = self.another_authorized_client.get(
             reverse('posts:profile_follow', args={self.user}), follow=True
         )
+        is_subscribe = Follow.objects.filter(user=self.another_user).exists()
         self.assertRedirects(
             response, reverse('posts:profile', args={self.user})
         )
+        self.assertTrue(is_subscribe)
 
     def test_unauthorized_user_cant_subscribe(self):
         """Неавторизованный пользователь отправлен на авторизацию"""
@@ -190,22 +192,28 @@ class PostsPagesTests(TestCase):
         )
 
     def test_user_with_subscribe_have_posts(self):
-        """У пользователя с подписками есть посты на странице /follow/"""
-        self.another_authorized_client.get(
-            reverse('posts:profile_follow', args={self.user}), follow=True
+        """У пользователя с подпиской 10 постов на первой странице /follow/"""
+        Follow.objects.create(
+            user=self.another_user,
+            author=self.user
         )
-        posts = Post.objects.filter(
-            author__following__user=self.another_user).exists()
-        self.assertTrue(posts)
+        response = self.another_authorized_client.get(
+            reverse('posts:follow_index')
+        )
+        follow = response.context.get('page_obj')
+        self.assertEqual(len(follow), 10)
 
     def test_follow_page_of_user_without_subscribe_is_clear(self):
         """Посты не попадают на страницу /follow/ пользователя без подписок"""
-        self.another_authorized_client.get(
+        Follow.objects.create(
+            user=self.another_user,
+            author=self.user
+        )
+        response = self.authorized_client.get(
             reverse('posts:follow_index')
         )
-        posts = Post.objects.filter(
-            author__following__user=self.another_user).exists()
-        self.assertFalse(posts)
+        follow = response.context.get('page_obj')
+        self.assertEqual(len(follow), 0)
 
 
 class PostsPagesImagesTests(TestCase):
